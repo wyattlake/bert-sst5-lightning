@@ -1,0 +1,3 @@
+checkpoint: bert-base-uncased
+epochs: 30
+learning_rate: 5.0e-05
