@@ -76,5 +76,19 @@ class BertSST(pl.LightningModule):
         self.run['eval_epoch/loss'].log(loss.item())
         self.run['eval_epoch/acc'].log(self.calc_acc(preds, targets))
 
+    def test_step(self, batch, batch_idx):
+        results = self.validation_step(batch, batch_idx)
+        return results
+
+    def test_epoch_end(self, outputs):
+        # Evaluating epoch averages
+        preds = torch.cat([x['preds'] for x in outputs])
+        targets = torch.cat([x['targets'] for x in outputs])
+        loss = torch.stack([x['loss'] for x in outputs]).mean()
+
+        # Neptune logging
+        self.run['test_epoch/loss'].log(loss.item())
+        self.run['test_epoch/acc'].log(self.calc_acc(preds, targets))
+
     def calc_acc(self, preds, targets):
         return 100 * (preds == targets).float().mean()

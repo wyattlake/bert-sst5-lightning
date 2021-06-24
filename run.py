@@ -25,6 +25,7 @@ def main(cfg):
     full_dataset = load_dataset("sst", "default")
     train_dataset = SSTDataset(cfg, full_dataset, device, split="train")
     eval_dataset = SSTDataset(cfg, full_dataset, device, split="validation")
+    test_dataset = SSTDataset(cfg, full_dataset, device, split="test")
 
     NEPTUNE_TOKEN = os.environ.get("NEPTUNE_TOKEN")
     run = neptune.init(
@@ -39,11 +40,14 @@ def main(cfg):
         train_dataset, batch_size=cfg.batch_size, shuffle=True)
     eval_loader = DataLoader(
         eval_dataset, batch_size=cfg.batch_size, shuffle=False)
+    test_loader = DataLoader(
+        test_dataset, batch_size=cfg.batch_size, shuffle=False)
 
     trainer = Trainer(deterministic=True,
                       accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
 
     trainer.fit(bert_sst5, train_loader, eval_loader)
+    trainer.test(test_dataloaders=test_loader)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=1 python run.py max_epochs=1
