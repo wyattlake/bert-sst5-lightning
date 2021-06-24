@@ -1,0 +1,2 @@
+type: "linear_warmup"
+warmup_steps: 0

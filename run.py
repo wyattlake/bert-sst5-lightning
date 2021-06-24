@@ -19,7 +19,7 @@ def main(cfg):
         "cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     # Random seeding
-    seed_everything(42, workers=True)
+    seed_everything(cfg.seed, workers=True)
 
     # Dataset loading
     full_dataset = load_dataset("sst", "default")
@@ -32,7 +32,7 @@ def main(cfg):
         api_token=NEPTUNE_TOKEN,
     )
 
-    bert_sst5 = BertSST(cfg, run)
+    bert_sst5 = BertSST(cfg, run, len(train_dataset))
 
     # Data loaders
     train_loader = DataLoader(
@@ -41,7 +41,7 @@ def main(cfg):
         eval_dataset, batch_size=cfg.batch_size, shuffle=False)
 
     trainer = Trainer(deterministic=True,
-                      accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.epochs, gpus=cfg.gpus)
+                      accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
 
     trainer.fit(bert_sst5, train_loader, eval_loader)
 
