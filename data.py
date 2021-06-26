@@ -1,22 +1,51 @@
+from collections import namedtuple
 from torch.utils.data import Dataset
-from datasets import load_dataset
 from transformers import AutoTokenizer
+from captum.attr import IntegratedGradients
 import numpy as np
 import torch
+
 
 class SSTDataset(Dataset):
     def __init__(self, cfg, full_dataset, device, size=60, split="train"):
         tokenizer = AutoTokenizer.from_pretrained(cfg.checkpoint)
         self.raw_dataset = full_dataset[split]
-        self.dataset = [
-            (
-                self.pad([tokenizer.cls_token_id] + tokenizer.encode(item["sentence"]) +
-                         [tokenizer.sep_token_id], size=size),
+        self.has_explanations = False
+        self.dataset = []
+
+        # Reformatting data
+        for item in self.raw_dataset:
+            token_ids = self.pad([tokenizer.cls_token_id] + tokenizer.encode(item["sentence"]) +
+                                 [tokenizer.sep_token_id], size=size)
+            new_item = [
+                token_ids,
                 self.map(item["label"]),
-            )
-            for item in self.raw_dataset
-        ]
+                ([1]*len(token_ids) + [0]*(size - len(token_ids))),
+            ]
+            self.dataset.append(new_item)
+
         self.device = device
+
+    def generate_explanations(self, model):
+        self.has_explanations = True
+        ig = IntegratedGradients(model)
+        for item in self.dataset:
+            token_ids = torch.tensor(
+                item[0], dtype=torch.float32, device=self.device).unsqueeze(0)
+            target = int(item[1])
+            attention_mask = torch.tensor(
+                item[3], device=self.device).unsqueeze(0)
+            attributions = ig.attribute(inputs=token_ids, target=target,
+                                        additional_forward_args=attention_mask)
+            attributions = self.summarize_attributions(attributions)
+            tokens = tokenizer.convert_ids_to_tokens(item[0])
+
+            item.append()
+
+    def summarize_attributions(self, attributions):
+        attributions = attributions.sum(dim=-1).squeeze(0)
+        attributions = attributions / torch.norm(attributions)
+        return attributions
 
     def pad(self, text, size=52):
         text_len = len(text)
@@ -36,7 +65,11 @@ class SSTDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        text, label = self.dataset[index]
-        text = torch.tensor(text, device=self.device)
-        label = torch.tensor(label, device=self.device)
-        return text, label
+        text = torch.tensor(self.dataset[index][0], device=self.device)
+        label = torch.tensor(self.dataset[index][1], device=self.device)
+        if not self.has_explanations:
+            return text, label, None
+        else:
+            explanation = torch.tensor(
+                self.dataset[index][3], device=self.device)
+            return text, label, explanation

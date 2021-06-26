@@ -33,7 +33,7 @@ def main(cfg):
         api_token=NEPTUNE_TOKEN,
     )
 
-    bert_sst5 = BertSST(cfg, run, len(train_dataset))
+    bert_sst5 = BertSST(cfg, run, len(train_dataset), False)
 
     # Data loaders
     train_loader = DataLoader(
