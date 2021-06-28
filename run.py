@@ -27,13 +27,16 @@ def main(cfg):
     eval_dataset = SSTDataset(cfg, full_dataset, device, split="validation")
     test_dataset = SSTDataset(cfg, full_dataset, device, split="test")
 
-    NEPTUNE_TOKEN = os.environ.get("NEPTUNE_TOKEN")
-    run = neptune.init(
-        project='wyattlake/bert-sst5-lightning',
-        api_token=NEPTUNE_TOKEN,
-    )
+    if cfg.logging:
+        NEPTUNE_TOKEN = os.environ.get("NEPTUNE_TOKEN")
+        run = neptune.init(
+            project='wyattlake/bert-sst5-lightning',
+            api_token=NEPTUNE_TOKEN,
+        )
+    else:
+        run = None
 
-    bert_sst5 = BertSST(cfg, run, len(train_dataset), False)
+    bert_sst5 = BertSST(cfg, run, len(train_dataset), False, cfg.logging)
 
     # Data loaders
     train_loader = DataLoader(
@@ -45,9 +48,13 @@ def main(cfg):
 
     trainer = Trainer(deterministic=True,
                       accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
+    teacher = BertSST(cfg, run, len(train_dataset), False, False)
+    teacher.load_state_dict(torch.load('teacher.pth'))
 
-    trainer.fit(bert_sst5, train_loader, eval_loader)
-    trainer.test(test_dataloaders=test_loader)
+    # train_dataset.generate_explanations(teacher)
+
+    # trainer.fit(bert_sst5, train_loader, eval_loader)
+    # trainer.test(test_dataloaders=test_loader)
 
 
 if __name__ == "__main__":

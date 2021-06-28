@@ -26,21 +26,22 @@ class SSTDataset(Dataset):
 
         self.device = device
 
-    def generate_explanations(self, model):
+    def generate_explanations(self, model, k=10):
         self.has_explanations = True
-        ig = IntegratedGradients(model)
+        self.attribution_fn = IntegratedGradients(model)
         for item in self.dataset:
-            token_ids = torch.tensor(
-                item[0], dtype=torch.float32, device=self.device).unsqueeze(0)
-            target = int(item[1])
-            attention_mask = torch.tensor(
-                item[3], device=self.device).unsqueeze(0)
-            attributions = ig.attribute(inputs=token_ids, target=target,
-                                        additional_forward_args=attention_mask)
-            attributions = self.summarize_attributions(attributions)
-            tokens = tokenizer.convert_ids_to_tokens(item[0])
-
+            attribution = self.generate_float_attribution(item)
             item.append()
+
+    def generate_float_attribution(self, item):
+        token_ids = torch.tensor(
+            item[0], dtype=torch.float32, device=self.device).unsqueeze(0)
+        target = int(item[1])
+        attention_mask = torch.tensor(
+            item[3], device=self.device).unsqueeze(0)
+        attributions = self.attribution_fn.attribute(inputs=token_ids, target=target,
+                                                     additional_forward_args=attention_mask)
+        return self.summarize_attributions(attributions)
 
     def summarize_attributions(self, attributions):
         attributions = attributions.sum(dim=-1).squeeze(0)
@@ -68,7 +69,7 @@ class SSTDataset(Dataset):
         text = torch.tensor(self.dataset[index][0], device=self.device)
         label = torch.tensor(self.dataset[index][1], device=self.device)
         if not self.has_explanations:
-            return text, label, None
+            return text, label
         else:
             explanation = torch.tensor(
                 self.dataset[index][3], device=self.device)

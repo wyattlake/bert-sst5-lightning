@@ -2,11 +2,12 @@ defaults:
   - lr: step
 
 seed: 0
+logging: False
 
 checkpoint: "bert-base-uncased"
 max_epochs: 15
-learning_rate: 0.00005
+learning_rate: 0.00001
 batch_size: 32
-accumulation_steps: 2
+accumulation_steps: 4
 gpus: 1
-weight_decay: 0.000002
+weight_decay: 0.0

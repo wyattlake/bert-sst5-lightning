@@ -5,7 +5,7 @@ import torch
 
 
 class BertSST(pl.LightningModule):
-    def __init__(self, cfg, run, train_len, explanation_regularation, logging=True):
+    def __init__(self, cfg, run, train_len, explanation_regularization, logging=True):
         super().__init__()
         self.model = AutoModelForSequenceClassification.from_pretrained(
             cfg.checkpoint, num_labels=5)
