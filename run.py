@@ -48,10 +48,12 @@ def main(cfg):
 
     trainer = Trainer(deterministic=True,
                       accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
-    teacher = BertSST(cfg, run, len(train_dataset), False, False)
-    teacher.load_state_dict(torch.load('teacher.pth'))
 
-    # train_dataset.generate_explanations(teacher)
+    teacher = BertSST(cfg, run, len(train_dataset), False, False)
+    teacher.load_state_dict(torch.load(
+        "/home/wyatt/projects/bert_sst5_lightning/teacher.pth"))
+
+    train_dataset.generate_explanations(teacher.model)
 
     # trainer.fit(bert_sst5, train_loader, eval_loader)
     # trainer.test(test_dataloaders=test_loader)

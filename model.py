@@ -1,6 +1,8 @@
+from logging import log
 import pytorch_lightning as pl
 from transformers import AutoModelForSequenceClassification, get_linear_schedule_with_warmup
 from torch.optim import lr_scheduler
+from torch.nn.functional import cross_entropy, log_softmax, softmax, kl_div
 import torch
 
 
@@ -16,6 +18,7 @@ class BertSST(pl.LightningModule):
         self.cfg = cfg
         self.total_steps = train_len // (self.cfg.batch_size *
                                          max(1, self.cfg.gpus)) // self.cfg.accumulation_steps * self.cfg.max_epochs
+        self.explanation_regularization = explanation_regularization
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(
@@ -35,9 +38,29 @@ class BertSST(pl.LightningModule):
         return embedding
 
     def training_step(self, batch, batch_idx):
-        inputs, targets = batch
-        logits = self.model(inputs).logits
-        loss = self.criterion(logits, targets.long())
+        if self.explanation_regularization:
+            inputs, targets, explanations = batch
+            outputs = self.model(inputs)
+            logits = outputs.logits
+
+            # Computes the average loss for the cls token in the last layer
+            attention_heads = outputs[1][-1]
+            averaged_attentions = torch.mean(attention_heads, dim=1).squeeze()
+            cls_token_averaged = averaged_attentions[:, 0, :].squeeze()
+            cls_token_averaged = log_softmax(cls_token_averaged, dim=1)
+            explanations = softmax(explanations.squeeze(), dim=1)
+
+            # Calculates the loss between the explanations and cls token average attention
+            kl_div_loss = self.cfg.lambda_weight * \
+                kl_div(cls_token_averaged, explanations, reduction='batchmean')
+
+            # Combines cross_entropy and kl_div loss into total loss
+            cross_entropy_loss = self.criterion(logits, targets.long())
+            loss = cross_entropy_loss + kl_div_loss
+        else:
+            inputs, targets = batch
+            logits = self.model(inputs).logits
+            loss = self.criterion(logits, targets.long())
 
         # Accuracy calculations
         preds = torch.argmax(logits, axis=1)
@@ -62,9 +85,29 @@ class BertSST(pl.LightningModule):
             self.run['train_epoch/acc'].log(self.calc_acc(preds, targets))
 
     def validation_step(self, batch, batch_idx):
-        inputs, targets = batch
-        logits = self.model(inputs).logits
-        loss = self.criterion(logits, targets.long())
+        if self.explanation_regularization:
+            inputs, targets, explanations = batch
+            outputs = self.model(inputs)
+            logits = outputs.logits
+
+            # Computes the average loss for the cls token in the last layer
+            attention_heads = outputs[1][-1]
+            averaged_attentions = torch.mean(attention_heads, dim=1).squeeze()
+            cls_token_averaged = averaged_attentions[:, 0, :].squeeze()
+            cls_token_averaged = log_softmax(cls_token_averaged, dim=1)
+            explanations = softmax(explanations.squeeze(), dim=1)
+
+            # Calculates the loss between the explanations and cls token average attention
+            kl_div_loss = self.cfg.lambda_weight * \
+                kl_div(cls_token_averaged, explanations, reduction='batchmean')
+
+            # Combines cross_entropy and kl_div loss into total loss
+            cross_entropy_loss = self.criterion(logits, targets.long())
+            loss = cross_entropy_loss + kl_div_loss
+        else:
+            inputs, targets = batch
+            logits = self.model(inputs).logits
+            loss = self.criterion(logits, targets.long())
 
         preds = torch.argmax(logits, axis=1)
 

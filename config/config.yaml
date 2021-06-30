@@ -11,3 +11,5 @@ batch_size: 32
 accumulation_steps: 4
 gpus: 1
 weight_decay: 0.0
+
+lambda_weight: 1.0
