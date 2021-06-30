@@ -36,27 +36,32 @@ def main(cfg):
     else:
         run = None
 
-    bert_sst5 = BertSST(cfg, run, len(train_dataset), False, cfg.logging)
+    if cfg.data.generate_explanations:
+        teacher = BertSST(cfg, None, len(train_dataset), False, device, False)
+        teacher.load_state_dict(torch.load(
+            "/home/wyatt/projects/bert_sst5_lightning/teacher.pth"))
 
-    # Data loaders
-    train_loader = DataLoader(
-        train_dataset, batch_size=cfg.batch_size, shuffle=True)
-    eval_loader = DataLoader(
-        eval_dataset, batch_size=cfg.batch_size, shuffle=False)
-    test_loader = DataLoader(
-        test_dataset, batch_size=cfg.batch_size, shuffle=False)
+    if cfg.run.train_model:
+        # Data loaders
+        train_loader = DataLoader(
+            train_dataset, batch_size=cfg.batch_size, shuffle=True)
+        eval_loader = DataLoader(
+            eval_dataset, batch_size=cfg.batch_size, shuffle=False)
+        test_loader = DataLoader(
+            test_dataset, batch_size=cfg.batch_size, shuffle=False)
 
-    trainer = Trainer(deterministic=True,
-                      accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
+        trainer = Trainer(deterministic=True,
+                          accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
 
-    teacher = BertSST(cfg, run, len(train_dataset), False, False)
-    teacher.load_state_dict(torch.load(
-        "/home/wyatt/projects/bert_sst5_lightning/teacher.pth"))
+        train_dataset.generate_explanations(teacher.model)
 
-    train_dataset.generate_explanations(teacher.model)
+        bert_sst5 = BertSST(cfg, run, len(train_dataset),
+                            False, device, cfg.logging)
 
-    # trainer.fit(bert_sst5, train_loader, eval_loader)
-    # trainer.test(test_dataloaders=test_loader)
+        trainer.fit(bert_sst5, train_loader, eval_loader)
+
+    if cfg.run.test:
+        trainer.test(test_dataloaders=test_loader)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from transformers import AutoTokenizer
 from captum.attr import LayerIntegratedGradients
 import numpy as np
 import torch
+from tqdm import tqdm
 
 
 class SSTDataset(Dataset):
@@ -31,7 +32,8 @@ class SSTDataset(Dataset):
         self.has_explanations = True
         self.attribution_fn = LayerIntegratedGradients(
             self.captum_forward, self.teacher.bert.embeddings.word_embeddings)
-        for item in self.dataset:
+        print("Generating Explanations")
+        for item in tqdm(self.dataset):
             attributions, tokens = self.generate_float_attribution(item)
 
             # Finding indices with float attributions in the top k percent
@@ -49,8 +51,8 @@ class SSTDataset(Dataset):
 
     def generate_float_attribution(self, item):
         token_ids = torch.tensor(
-            item[0], dtype=torch.float32, device=self.device).unsqueeze(0)
-        target = int(item[1])
+            item[0], device=self.device).unsqueeze(0)
+        target = torch.tensor(item[1], dtype=torch.int64, device=self.device)
         attention_mask = torch.tensor(
             item[2], device=self.device).unsqueeze(0)
         attributions = self.attribution_fn.attribute(inputs=token_ids, target=target,

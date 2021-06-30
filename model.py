@@ -7,10 +7,11 @@ import torch
 
 
 class BertSST(pl.LightningModule):
-    def __init__(self, cfg, run, train_len, explanation_regularization, logging=True):
+    def __init__(self, cfg, run, train_len, explanation_regularization, device, logging=True):
         super().__init__()
         self.model = AutoModelForSequenceClassification.from_pretrained(
             cfg.checkpoint, num_labels=5)
+        self.model.to(device)
         self.criterion = torch.nn.CrossEntropyLoss()
         self.logging = logging
         if logging:
