@@ -10,7 +10,7 @@ class BertSST(pl.LightningModule):
     def __init__(self, cfg, run, train_len, explanation_regularization, device, logging=True):
         super().__init__()
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            cfg.checkpoint, num_labels=5)
+            cfg.checkpoint, num_labels=5, output_attentions=True)
         self.model.to(device)
         self.criterion = torch.nn.CrossEntropyLoss()
         self.logging = logging
@@ -55,9 +55,16 @@ class BertSST(pl.LightningModule):
             kl_div_loss = self.cfg.lambda_weight * \
                 kl_div(cls_token_averaged, explanations, reduction='batchmean')
 
-            # Combines cross_entropy and kl_div loss into total loss
-            cross_entropy_loss = self.criterion(logits, targets.long())
-            loss = cross_entropy_loss + kl_div_loss
+            # Combines cross entropy and kl_div loss into total loss
+            ce_loss = self.criterion(logits, targets.long())
+            loss = ce_loss + kl_div_loss
+
+            # Logs kl_div and cross entropy loss
+            if self.logging:
+                self.run['train/ce_loss'].log(ce_loss /
+                                              self.cfg.batch_size)
+                self.run['train/kl_div_loss'].log(
+                    kl_div_loss / self.cfg.batch_size)
         else:
             inputs, targets = batch
             logits = self.model(inputs).logits
@@ -86,7 +93,7 @@ class BertSST(pl.LightningModule):
             self.run['train_epoch/acc'].log(self.calc_acc(preds, targets))
 
     def validation_step(self, batch, batch_idx):
-        if self.explanation_regularization:
+        if not self.explanation_regularization:
             inputs, targets, explanations = batch
             outputs = self.model(inputs)
             logits = outputs.logits

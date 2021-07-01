@@ -2,7 +2,7 @@ defaults:
   - lr: step
 
 seed: 0
-logging: False
+logging: True
 
 checkpoint: "bert-base-uncased"
 max_epochs: 15
@@ -12,11 +12,17 @@ accumulation_steps: 4
 gpus: 1
 weight_decay: 0.0
 lambda_weight: 1.0
+explanation_regularization: True
 
 run:
-  train_model: False
-  test_model: False
+  train_model: True
+  test_model: True
 
 data:
-  generate_explanations: True
-  save_explanations: True
+  generate_explanations: False
+  save_explanations: False
+  load_explanations: True
+  teacher_path: "/home/wyatt/projects/bert_sst5_lightning/teacher.pth"
+  eval_csv_path: "/home/wyatt/projects/bert_sst5_lightning/eval_explanations.csv"
+  test_csv_path: "/home/wyatt/projects/bert_sst5_lightning/test_explanations.csv"
+  train_csv_path: "/home/wyatt/projects/bert_sst5_lightning/train_explanations.csv"

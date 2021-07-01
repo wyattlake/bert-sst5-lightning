@@ -2,16 +2,16 @@ from collections import namedtuple
 from torch.utils.data import Dataset
 from transformers import AutoTokenizer
 from captum.attr import LayerIntegratedGradients
+from tqdm import tqdm
 import numpy as np
 import torch
-from tqdm import tqdm
+import csv
 
 
 class SSTDataset(Dataset):
     def __init__(self, cfg, full_dataset, device, size=60, split="train"):
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.checkpoint)
         self.raw_dataset = full_dataset[split]
-        self.has_explanations = False
         self.dataset = []
 
         # Reformatting data
@@ -26,6 +26,19 @@ class SSTDataset(Dataset):
             self.dataset.append(new_item)
 
         self.device = device
+        self.cfg = cfg
+        self.has_explanations = False
+
+    def load_explanations(self):
+        self.has_explanations = True
+        with open(self.cfg.data.load_csv_path, newline='') as csvfile:
+            reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
+            for idx, item in enumerate(reader):
+                converted = []
+                for sub in item:
+                    sub = float(sub)
+                    converted.append(sub)
+                self.dataset[idx].append(converted)
 
     def generate_explanations(self, model, k=10):
         self.teacher = model
@@ -33,21 +46,44 @@ class SSTDataset(Dataset):
         self.attribution_fn = LayerIntegratedGradients(
             self.captum_forward, self.teacher.bert.embeddings.word_embeddings)
         print("Generating Explanations")
-        for item in tqdm(self.dataset):
-            attributions, tokens = self.generate_float_attribution(item)
+        if self.cfg.data.save_explanations:
+            with open(self.cfg.data.save_csv_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile, delimiter=' ',
+                                    quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                for item in tqdm(self.dataset):
+                    attributions, tokens = self.generate_float_attribution(
+                        item)
 
-            # Finding indices with float attributions in the top k percent
-            topk_indices = torch.topk(attributions, int(
-                attributions.shape[0] * k / 100), sorted=False).indices
+                    # Finding indices with float attributions in the top k percent
+                    topk_indices = torch.topk(attributions, int(
+                        attributions.shape[0] * k / 100), sorted=False).indices
 
-            # Building the binary explanation from the float attributions
-            binary_explanation = torch.ones_like(
-                torch.tensor([item[0]], device=self.device)) * (1e-8)
-            binary_explanation.index_fill_(1, topk_indices, 1)
+                    # Building the binary explanation from the float attributions
+                    binary_explanation = torch.ones_like(
+                        torch.tensor([item[0]], device=self.device)) * (1e-8)
+                    binary_explanation.index_fill_(1, topk_indices, 1)
 
-            # Appending new information to the data
-            item.append(binary_explanation)
-            item.append(tokens)
+                    writer.writerow(binary_explanation.squeeze().tolist())
+
+                    # Appending new information to the data
+                    item.append(binary_explanation)
+                    item.append(tokens)
+        else:
+            for item in tqdm(self.dataset):
+                attributions, tokens = self.generate_float_attribution(item)
+
+                # Finding indices with float attributions in the top k percent
+                topk_indices = torch.topk(attributions, int(
+                    attributions.shape[0] * k / 100), sorted=False).indices
+
+                # Building the binary explanation from the float attributions
+                binary_explanation = torch.ones_like(
+                    torch.tensor([item[0]], device=self.device)) * (1e-8)
+                binary_explanation.index_fill_(1, topk_indices, 1)
+
+                # Appending new information to the data
+                item.append(binary_explanation)
+                item.append(tokens)
 
     def generate_float_attribution(self, item):
         token_ids = torch.tensor(
@@ -90,9 +126,9 @@ class SSTDataset(Dataset):
     def __getitem__(self, index):
         text = torch.tensor(self.dataset[index][0], device=self.device)
         label = torch.tensor(self.dataset[index][1], device=self.device)
-        if not self.has_explanations:
-            return text, label
-        else:
+        if self.has_explanations:
             explanation = torch.tensor(
                 self.dataset[index][3], device=self.device)
             return text, label, explanation
+        else:
+            return text, label

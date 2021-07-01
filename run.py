@@ -38,8 +38,11 @@ def main(cfg):
 
     if cfg.data.generate_explanations:
         teacher = BertSST(cfg, None, len(train_dataset), False, device, False)
-        teacher.load_state_dict(torch.load(
-            "/home/wyatt/projects/bert_sst5_lightning/teacher.pth"))
+        teacher.load_state_dict(torch.load(cfg.data.teacher_path))
+        train_dataset.generate_explanations(teacher.model)
+
+    if cfg.data.load_explanations:
+        train_dataset.load_explanations()
 
     if cfg.run.train_model:
         # Data loaders
@@ -53,15 +56,13 @@ def main(cfg):
         trainer = Trainer(deterministic=True,
                           accumulate_grad_batches=cfg.accumulation_steps, max_epochs=cfg.max_epochs, gpus=cfg.gpus)
 
-        train_dataset.generate_explanations(teacher.model)
-
         bert_sst5 = BertSST(cfg, run, len(train_dataset),
-                            False, device, cfg.logging)
+                            cfg.explanation_regularization, device, cfg.logging)
 
         trainer.fit(bert_sst5, train_loader, eval_loader)
 
-    if cfg.run.test:
-        trainer.test(test_dataloaders=test_loader)
+        if cfg.run.test_model:
+            trainer.test(test_dataloaders=test_loader)
 
 
 if __name__ == "__main__":

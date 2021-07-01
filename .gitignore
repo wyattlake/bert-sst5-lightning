@@ -3,3 +3,4 @@
 /.vscode/
 .env
 teacher.pth
+explanations.csv
