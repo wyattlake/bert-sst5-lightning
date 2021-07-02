@@ -29,9 +29,9 @@ class SSTDataset(Dataset):
         self.cfg = cfg
         self.has_explanations = False
 
-    def load_explanations(self):
+    def load_explanations(self, path):
         self.has_explanations = True
-        with open(self.cfg.data.load_csv_path, newline='') as csvfile:
+        with open(path, newline='') as csvfile:
             reader = csv.reader(csvfile, delimiter=' ', quotechar='|')
             for idx, item in enumerate(reader):
                 converted = []
@@ -40,18 +40,18 @@ class SSTDataset(Dataset):
                     converted.append(sub)
                 self.dataset[idx].append(converted)
 
-    def generate_explanations(self, model, k=10):
+    def generate_explanations(self, model, path, k=10):
         self.teacher = model
         self.has_explanations = True
         self.attribution_fn = LayerIntegratedGradients(
             self.captum_forward, self.teacher.bert.embeddings.word_embeddings)
         print("Generating Explanations")
         if self.cfg.data.save_explanations:
-            with open(self.cfg.data.save_csv_path, 'w', newline='') as csvfile:
+            with open(path, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile, delimiter=' ',
                                     quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 for item in tqdm(self.dataset):
-                    attributions, tokens = self.generate_float_attribution(
+                    attributions = self.generate_float_attribution(
                         item)
 
                     # Finding indices with float attributions in the top k percent
@@ -67,10 +67,9 @@ class SSTDataset(Dataset):
 
                     # Appending new information to the data
                     item.append(binary_explanation)
-                    item.append(tokens)
         else:
             for item in tqdm(self.dataset):
-                attributions, tokens = self.generate_float_attribution(item)
+                attributions = self.generate_float_attribution(item)
 
                 # Finding indices with float attributions in the top k percent
                 topk_indices = torch.topk(attributions, int(
@@ -83,7 +82,6 @@ class SSTDataset(Dataset):
 
                 # Appending new information to the data
                 item.append(binary_explanation)
-                item.append(tokens)
 
     def generate_float_attribution(self, item):
         token_ids = torch.tensor(
@@ -91,11 +89,24 @@ class SSTDataset(Dataset):
         target = torch.tensor(item[1], dtype=torch.int64, device=self.device)
         attention_mask = torch.tensor(
             item[2], device=self.device).unsqueeze(0)
-        attributions = self.attribution_fn.attribute(inputs=token_ids, target=target,
-                                                     additional_forward_args=attention_mask)
-        attributions = self.summarize_attributions(attributions)
-        all_tokens = self.tokenizer.convert_ids_to_tokens(item[0])
-        return attributions, all_tokens
+        all_attributions = []
+
+        # Generating explanations for each of the 5 possible labels
+        for i in range(5):
+            attributions = self.attribution_fn.attribute(inputs=token_ids, target=i,
+                                                         additional_forward_args=attention_mask)
+            attributions = self.summarize_attributions(attributions)
+
+            # Attributions are flipped if the label is not the target
+            if i != target:
+                torch.mul(attributions, -1)
+            all_attributions.append(attributions)
+
+        # Target and non target attributions are averaged
+        stacked_attributions = torch.stack(all_attributions)
+        averaged_attributions = stacked_attributions.mean(dim=0)
+
+        return averaged_attributions
 
     def summarize_attributions(self, attributions):
         attributions = attributions.sum(dim=-1).squeeze(0)

@@ -1,6 +1,6 @@
 /__pycache__/
 /outputs/
 /.vscode/
+/explanations/
 .env
 teacher.pth
-explanations.csv

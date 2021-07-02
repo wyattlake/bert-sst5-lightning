@@ -39,10 +39,20 @@ def main(cfg):
     if cfg.data.generate_explanations:
         teacher = BertSST(cfg, None, len(train_dataset), False, device, False)
         teacher.load_state_dict(torch.load(cfg.data.teacher_path))
-        train_dataset.generate_explanations(teacher.model)
+
+        # Generating explanations for each dataset
+        train_dataset.generate_explanations(
+            teacher.model, cfg.data.train_csv_path)
+        eval_dataset.generate_explanations(
+            teacher.model, cfg.data.eval_csv_path)
+        test_dataset.generate_explanations(
+            teacher.model, cfg.data.test_csv_path)
 
     if cfg.data.load_explanations:
-        train_dataset.load_explanations()
+        # Loading explanations for each dataset
+        train_dataset.load_explanations(cfg.data.train_dataset_path)
+        eval_dataset.load_explanations(cfg.data.eval_dataset_path)
+        test_dataset.load_explanations(cfg.data.test_dataset_path)
 
     if cfg.run.train_model:
         # Data loaders
