@@ -92,7 +92,7 @@ class SSTDataset(Dataset):
         all_attributions = []
 
         # Generating explanations for each of the 5 possible labels
-        for i in range(5):
+        for i in range(self.cfg.label_count):
             attributions = self.attribution_fn.attribute(inputs=token_ids, target=i,
                                                          additional_forward_args=attention_mask)
             attributions = self.summarize_attributions(attributions)
@@ -100,7 +100,10 @@ class SSTDataset(Dataset):
             # Attributions are flipped if the label is not the target
             if i != target:
                 torch.mul(attributions, -1)
-            all_attributions.append(attributions)
+
+            # Attributions are standardized and added to the list
+            all_attributions.append(
+                self.standardize_attributions(attributions))
 
         # Target and non target attributions are averaged
         stacked_attributions = torch.stack(all_attributions)
@@ -116,6 +119,11 @@ class SSTDataset(Dataset):
     def captum_forward(self, input_ids, attention_mask=None):
         output = self.teacher(input_ids, attention_mask=attention_mask)[0]
         return output
+
+    def standardize_attributions(self, tensor):
+        means = tensor.mean()
+        stds = tensor.std()
+        return (tensor - means) / stds
 
     def pad(self, text, size=52):
         text_len = len(text)

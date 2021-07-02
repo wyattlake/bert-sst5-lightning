@@ -13,6 +13,7 @@ gpus: 1
 weight_decay: 0.0
 lambda_weight: 1.0
 explanation_regularization: True
+label_count: 5
 
 run:
   train_model: False
