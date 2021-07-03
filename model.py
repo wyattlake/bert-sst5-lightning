@@ -9,14 +9,14 @@ import torch
 class BertSST(pl.LightningModule):
     def __init__(self, cfg, run, train_len, explanation_regularization, device, logging=True):
         super().__init__()
+        self.cfg = cfg
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            cfg.checkpoint, num_labels=5, output_attentions=True)
+            cfg.checkpoint, num_labels=self.cfg.label_count, output_attentions=True)
         self.model.to(device)
         self.criterion = torch.nn.CrossEntropyLoss()
         self.logging = logging
         if logging:
             self.run = run
-        self.cfg = cfg
         self.total_steps = train_len // (self.cfg.batch_size *
                                          max(1, self.cfg.gpus)) // self.cfg.accumulation_steps * self.cfg.max_epochs
         self.explanation_regularization = explanation_regularization
@@ -40,8 +40,8 @@ class BertSST(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         if self.explanation_regularization:
-            inputs, targets, explanations = batch
-            outputs = self.model(inputs)
+            inputs, targets, attention_mask, explanations = batch
+            outputs = self.model(inputs, attention_mask=attention_mask)
             logits = outputs.logits
 
             # Computes the average loss for the cls token in the last layer
@@ -66,8 +66,8 @@ class BertSST(pl.LightningModule):
                 self.run['train/kl_div_loss'].log(
                     kl_div_loss / self.cfg.batch_size)
         else:
-            inputs, targets = batch
-            logits = self.model(inputs).logits
+            inputs, targets, attention_mask = batch
+            logits = self.model(inputs, attention_mask=attention_mask).logits
             loss = self.criterion(logits, targets.long())
 
         # Accuracy calculations
@@ -93,9 +93,9 @@ class BertSST(pl.LightningModule):
             self.run['train_epoch/acc'].log(self.calc_acc(preds, targets))
 
     def validation_step(self, batch, batch_idx):
-        if not self.explanation_regularization:
-            inputs, targets, explanations = batch
-            outputs = self.model(inputs)
+        if self.explanation_regularization:
+            inputs, targets, attention_mask, explanations = batch
+            outputs = self.model(inputs, attention_mask=attention_mask)
             logits = outputs.logits
 
             # Computes the average loss for the cls token in the last layer
@@ -113,8 +113,8 @@ class BertSST(pl.LightningModule):
             cross_entropy_loss = self.criterion(logits, targets.long())
             loss = cross_entropy_loss + kl_div_loss
         else:
-            inputs, targets = batch
-            logits = self.model(inputs).logits
+            inputs, targets, attention_mask = batch
+            logits = self.model(inputs, attention_mask=attention_mask).logits
             loss = self.criterion(logits, targets.long())
 
         preds = torch.argmax(logits, axis=1)

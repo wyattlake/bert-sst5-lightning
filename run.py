@@ -27,6 +27,7 @@ def main(cfg):
     eval_dataset = SSTDataset(cfg, full_dataset, device, split="validation")
     test_dataset = SSTDataset(cfg, full_dataset, device, split="test")
 
+    # Neptune initialization
     if cfg.logging:
         NEPTUNE_TOKEN = os.environ.get("NEPTUNE_TOKEN")
         run = neptune.init(

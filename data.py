@@ -13,6 +13,7 @@ class SSTDataset(Dataset):
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.checkpoint)
         self.raw_dataset = full_dataset[split]
         self.dataset = []
+        self.cfg = cfg
 
         # Reformatting data
         for item in self.raw_dataset:
@@ -26,7 +27,6 @@ class SSTDataset(Dataset):
             self.dataset.append(new_item)
 
         self.device = device
-        self.cfg = cfg
         self.has_explanations = False
 
     def load_explanations(self, path):
@@ -137,7 +137,7 @@ class SSTDataset(Dataset):
         if val == 0:
             return 0
         else:
-            return np.ceil(val * 5) - 1
+            return np.ceil(val * self.cfg.label_count) - 1
 
     def __len__(self):
         return len(self.dataset)
@@ -145,9 +145,11 @@ class SSTDataset(Dataset):
     def __getitem__(self, index):
         text = torch.tensor(self.dataset[index][0], device=self.device)
         label = torch.tensor(self.dataset[index][1], device=self.device)
+        attention_mask = torch.tensor(
+            self.dataset[index][2], device=self.device)
         if self.has_explanations:
             explanation = torch.tensor(
                 self.dataset[index][3], device=self.device)
-            return text, label, explanation
+            return text, label, attention_mask, explanation
         else:
-            return text, label
+            return text, label, attention_mask
